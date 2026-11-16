@@ -4,9 +4,11 @@ import {
   collectiveMembers,
   collectives,
   eventInterests,
+  eventTickets,
   events,
   follows,
   moderationReports,
+  merchandise,
   playlistTracks,
   playlists,
   trackCredits,
@@ -31,6 +33,7 @@ export const artistsRelations = relations(artists, ({ one, many }) => ({
   owner: one(users, { fields: [artists.ownerId], references: [users.id] }),
   tracks: many(tracks),
   events: many(events),
+  merchandise: many(merchandise),
   followers: many(follows),
   collectiveMemberships: many(collectiveMembers),
   credits: many(trackCredits),
@@ -62,6 +65,15 @@ export const trackCreditsRelations = relations(trackCredits, ({ one }) => ({
 export const eventsRelations = relations(events, ({ one, many }) => ({
   artist: one(artists, { fields: [events.artistId], references: [artists.id] }),
   interests: many(eventInterests),
+  tickets: many(eventTickets),
+}));
+
+export const eventTicketsRelations = relations(eventTickets, ({ one }) => ({
+  event: one(events, { fields: [eventTickets.eventId], references: [events.id] }),
+}));
+
+export const merchandiseRelations = relations(merchandise, ({ one }) => ({
+  artist: one(artists, { fields: [merchandise.artistId], references: [artists.id] }),
 }));
 
 export const playlistsRelations = relations(playlists, ({ one, many }) => ({

@@ -41,17 +41,18 @@ pnpm db:migrate  # aplica migrations no banco configurado
 - `shared/`: tipos e regras compartilhadas entre cliente e servidor.
 - `drizzle/`: schema e migrations do banco.
 - `public/`: manifesto, rotas e arquivos públicos.
+- `mobile/`: app Android Expo/React Native, consumidor da API CENA e configuração remota APK/AAB.
 - `scripts/`: rotinas de manutenção.
 - `Dockerfile`: build e inicialização do servidor em produção.
 - `docs/`: documentação de operação e publicação.
 
-## GitHub não é o servidor do site
+## App Android principal e site complementar
 
-O repositório [`diego47colvin-debug/cena`](https://github.com/diego47colvin-debug/cena) guarda o código. A branch `main` contém as melhorias de cobertura municipal e rotas de detalhe. **Neste momento não há um workflow em `.github/workflows` que publique o site ao receber um push.**
+O app Android, em `mobile/`, é o ponto principal de descoberta e reprodução. O site continua como complemento público e área de gestão para artistas; ambos usam a mesma API CENA e o site permanece acessível em `https://cenaapp-rgtrg8wt.manus.space`.
 
-O aplicativo usa backend Express/tRPC e banco MySQL; por isso, GitHub Pages sozinho não consegue executá-lo. A cópia Webdev nova está publicada no Manus em `https://cenaapp-rgtrg8.manus.space`. O site antigo, `https://cena-kn4vk68m.manus.space`, é outro projeto e permanece separado. O envio deste repositório para o GitHub, por si só, não altera nenhum desses sites.
+O repositório [`diego47colvin-debug/cena`](https://github.com/diego47colvin-debug/cena) guarda o código, mas o backend Express/tRPC e o banco MySQL precisam continuar em um ambiente de servidor. O workflow atual de GitHub Pages não executa esse backend; um push ao GitHub não atualiza, por si só, o site publicado. A configuração `mobile/eas.json` prepara um perfil remoto `preview` para APK, mas o APK só existe depois que a compilação é executada no Dashboard Expo/EAS ligado à conta correta.
 
-Veja [`docs/publicacao.md`](docs/publicacao.md) antes de publicar. Ele explica o que está configurado hoje e o que falta para automatizar uma publicação que comece no GitHub.
+Veja [`docs/publicacao.md`](docs/publicacao.md) antes de publicar. Migrations são versionadas no repositório; não rode `pnpm db:migrate` ou `pnpm db:push` contra o banco compartilhado sem a autorização/revisão operacional correspondente.
 
 ## Segurança
 

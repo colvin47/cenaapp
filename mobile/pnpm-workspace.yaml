@@ -1,0 +1,6 @@
+packages:
+  - "."
+
+# Nenhum script de dependência é permitido sem revisão explícita.
+onlyBuiltDependencies: []
+ignoredBuiltDependencies: []

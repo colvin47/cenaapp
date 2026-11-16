@@ -1,5 +1,6 @@
 import {
   boolean,
+  decimal,
   index,
   int,
   mysqlEnum,
@@ -131,7 +132,7 @@ export const tracks = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ artistIdx: index("idx_tracks_artist").on(table.artistId), cityGenreIdx: index("idx_tracks_city_genre").on(table.city, table.genre), formatIdx: index("idx_tracks_release_type").on(table.releaseType), createdAtIdx: index("idx_tracks_created_at").on(table.createdAt) }),
+  table => ({ artistIdx: index("idx_tracks_artist").on(table.artistId), cityGenreIdx: index("idx_tracks_city_genre").on(table.city, table.genre), formatIdx: index("idx_tracks_release_type").on(table.releaseType), createdAtIdx: index("idx_tracks_created_at").on(table.createdAt), collectiveIdx: index("idx_tracks_collective").on(table.collectiveId) }),
 );
 
 export const trackCredits = mysqlTable(
@@ -154,7 +155,10 @@ export const events = mysqlTable(
     collectiveId: int("collectiveId").references(() => collectives.id, { onDelete: "set null" }),
     name: varchar("name", { length: 180 }).notNull(),
     venue: varchar("venue", { length: 180 }).notNull(),
+    address: varchar("address", { length: 255 }),
     city: varchar("city", { length: 120 }).notNull(),
+    latitude: decimal("latitude", { precision: 10, scale: 7 }),
+    longitude: decimal("longitude", { precision: 10, scale: 7 }),
     eventType: mysqlEnum("eventType", ["show", "battle", "cypher", "cultural_round", "diy_festival", "occupation", "zine_fair", "workshop", "listening_party", "release"]).default("show").notNull(),
     admissionType: mysqlEnum("admissionType", ["ticket", "free", "contribution"]).default("ticket").notNull(),
     eventDate: timestamp("eventDate").notNull(),
@@ -169,7 +173,42 @@ export const events = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  table => ({ cityDateIdx: index("idx_events_city_date").on(table.city, table.eventDate), typeIdx: index("idx_events_type").on(table.eventType), artistIdx: index("idx_events_artist").on(table.artistId) }),
+  table => ({ cityDateIdx: index("idx_events_city_date").on(table.city, table.eventDate), typeIdx: index("idx_events_type").on(table.eventType), artistIdx: index("idx_events_artist").on(table.artistId), collectiveIdx: index("idx_events_collective").on(table.collectiveId) }),
+);
+
+export const eventTickets = mysqlTable(
+  "eventTickets",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    eventId: int("eventId").notNull().references(() => events.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    price: decimal("price", { precision: 10, scale: 2 }).default("0.00").notNull(),
+    quantityAvailable: int("quantityAvailable").default(0).notNull(),
+    quantityReserved: int("quantityReserved").default(0).notNull(),
+    pixKey: varchar("pixKey", { length: 255 }),
+    isAvailable: boolean("isAvailable").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ eventIdx: index("idx_event_tickets_event_available").on(table.eventId, table.isAvailable) }),
+);
+
+export const merchandise = mysqlTable(
+  "merchandise",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    artistId: int("artistId").notNull().references(() => artists.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 160 }).notNull(),
+    description: text("description"),
+    price: decimal("price", { precision: 10, scale: 2 }).default("0.00").notNull(),
+    stock: int("stock").default(0).notNull(),
+    imageUrl: text("imageUrl"),
+    externalUrl: text("externalUrl"),
+    isAvailable: boolean("isAvailable").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({ artistAvailableIdx: index("idx_merchandise_artist_available").on(table.artistId, table.isAvailable) }),
 );
 
 export const playlists = mysqlTable(
@@ -223,6 +262,8 @@ export const trackPlays = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     trackId: int("trackId").notNull().references(() => tracks.id, { onDelete: "cascade" }),
     userId: int("userId").references(() => users.id, { onDelete: "set null" }),
+    listenedSeconds: int("listenedSeconds").default(0).notNull(),
+    city: varchar("city", { length: 120 }),
     playedAt: timestamp("playedAt").defaultNow().notNull(),
   },
   table => ({ trackDateIdx: index("idx_track_plays_track_date").on(table.trackId, table.playedAt), userDateIdx: index("idx_track_plays_user_date").on(table.userId, table.playedAt) }),
@@ -296,6 +337,10 @@ export type TrackCredit = typeof trackCredits.$inferSelect;
 export type InsertTrackCredit = typeof trackCredits.$inferInsert;
 export type Event = typeof events.$inferSelect;
 export type InsertEvent = typeof events.$inferInsert;
+export type EventTicket = typeof eventTickets.$inferSelect;
+export type InsertEventTicket = typeof eventTickets.$inferInsert;
+export type Merchandise = typeof merchandise.$inferSelect;
+export type InsertMerchandise = typeof merchandise.$inferInsert;
 export type Playlist = typeof playlists.$inferSelect;
 export type InsertPlaylist = typeof playlists.$inferInsert;
 export type PlaylistTrack = typeof playlistTracks.$inferSelect;

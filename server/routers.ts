@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { artists, events, follows, notifications, tracks } from "../drizzle/schema";
-import { addTrackToPlaylist, cancelArtistEvent, createArtistProfile, createCustomNotification, addCollectiveMember, createCollective, createModerationReport, createPlaylist, hideReportedContent, acceptCollectiveInvite, acceptPendingCollectiveInvite, createCollectiveInvite, declineCollectiveInvite, getCollectivePermission, listAuditLogs, listCollectiveMembers, listPendingCollectiveInvites, previewCollectiveInvite, listModerationReports, listUserCollectives, removeCollectiveMember, updateCollectiveMember, updateModerationReport, writeAuditLog, findArtists, findTracks, getArtistByOwnerId, getArtistCatalog, getArtistStats, getArtistPublicDetail, getDb, getEventDetail, getPlaylistDetail, getTrackDetail, getUserLibrary, listArtistEvents, listEvents, listNotifications, markNotificationsRead, recordTrackPlay, setAccountType, takedownTrack, toggleEventInterest, toggleFollow, toggleSavedTrack, updateArtistEvent, updateArtistProfile, updateListenerProfile, deleteArtistEvent } from "./db";
+import { addTrackToPlaylist, cancelArtistEvent, createArtistEventTicket, createArtistMerchandise, createArtistProfile, createCustomNotification, addCollectiveMember, createCollective, createModerationReport, createPlaylist, hideReportedContent, acceptCollectiveInvite, acceptPendingCollectiveInvite, createCollectiveInvite, declineCollectiveInvite, getCollectivePermission, listArtistMerchandise, listPublicEventTickets, listPublicMerchandise, listAuditLogs, listCollectiveMembers, listPendingCollectiveInvites, previewCollectiveInvite, listModerationReports, listUserCollectives, removeCollectiveMember, updateCollectiveMember, updateModerationReport, writeAuditLog, findArtists, findTracks, getArtistByOwnerId, getArtistCatalog, getArtistStats, getArtistPublicDetail, getDb, getEventDetail, getPlaylistDetail, getTrackDetail, getUserLibrary, listArtistEvents, listEvents, listNotifications, markNotificationsRead, recordTrackListen, setAccountType, takedownTrack, toggleEventInterest, toggleFollow, toggleSavedTrack, updateArtistEvent, updateArtistProfile, updateListenerProfile, deleteArtistEvent } from "./db";
 import { storageDelete, storagePresignPut } from "./storage";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -17,6 +17,18 @@ const discoveryInput = z.object({
   genre: z.string().trim().max(80).default("Tudo"),
   search: z.string().trim().max(120).default(""),
 });
+
+const publicHttpsUrl = z.string().trim().url().max(2048).refine(value => {
+  try { return new URL(value).protocol === "https:"; } catch { return false; }
+}, "Use um endereço HTTPS.");
+const currencyPrice = z.number().min(0).max(999999.99).refine(amount => {
+  const cents = amount * 100;
+  return Math.abs(cents - Math.round(cents)) <= Number.EPSILON * Math.max(1, Math.abs(cents)) * 4;
+}, "O preço deve ter no máximo duas casas decimais.");
+const hasCoordinatePair = (coordinates: { latitude?: number | null; longitude?: number | null }) =>
+  (coordinates.latitude === undefined && coordinates.longitude === undefined)
+  || (coordinates.latitude === null && coordinates.longitude === null)
+  || (typeof coordinates.latitude === "number" && typeof coordinates.longitude === "number");
 
 function foldSearch(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
@@ -134,6 +146,8 @@ export const appRouter = router({
     myEvents: protectedProcedure.query(({ ctx }) => listArtistEvents(ctx.user.id)),
     trackDetail: publicProcedure.input(z.object({ id: z.number().int().positive() })).query(({ input }) => getTrackDetail(input.id)),
     eventDetail: publicProcedure.input(z.object({ id: z.number().int().positive() })).query(({ input }) => getEventDetail(input.id)),
+    eventTickets: publicProcedure.input(z.object({ eventId: z.number().int().positive() })).query(({ input }) => listPublicEventTickets(input.eventId)),
+    artistMerchandise: publicProcedure.input(z.object({ artistId: z.number().int().positive() })).query(({ input }) => listPublicMerchandise(input.artistId)),
     artistDetail: publicProcedure.input(z.object({ handle: z.string().trim().min(1).max(80).regex(/^@?[a-zA-Z0-9_]+$/) })).query(({ input }) => getArtistPublicDetail(input.handle)),
     playlistDetail: publicProcedure.input(z.object({ id: z.number().int().positive() })).query(({ ctx, input }) => getPlaylistDetail(input.id, ctx.user?.id)),
 
@@ -176,7 +190,22 @@ export const appRouter = router({
       if (!removed) throw new TRPCError({ code: "NOT_FOUND", message: "Faixa não encontrada ou já removida." });
       return { removed: true };
     }),
-    recordPlay: publicProcedure.input(z.object({ trackId: z.number().int().positive() })).mutation(async ({ ctx, input }) => ({ recorded: await recordTrackPlay(input.trackId, ctx.user?.id) })),
+    recordPlay: publicProcedure.input(z.object({ trackId: z.number().int().positive(), listenedSeconds: z.number().int().min(0).max(86400).default(0), city: z.string().trim().max(120).optional() })).mutation(async ({ ctx, input }) => ({ recorded: await recordTrackListen(input.trackId, ctx.user?.id, input.listenedSeconds, input.city) })),
+    myMerchandise: protectedProcedure.query(({ ctx }) => listArtistMerchandise(ctx.user.id)),
+    createMerchandise: protectedProcedure.input(z.object({ name: z.string().trim().min(2).max(160), description: z.string().trim().max(1000).optional(), price: currencyPrice, stock: z.number().int().min(0).max(100000), imageUrl: publicHttpsUrl.optional(), externalUrl: publicHttpsUrl.optional() })).mutation(async ({ ctx, input }) => {
+      if (ctx.user.accountType !== "artist" && ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas artistas podem cadastrar produtos." });
+      const id = await createArtistMerchandise(ctx.user.id, input);
+      if (!id) throw new TRPCError({ code: "BAD_REQUEST", message: "Crie seu perfil de artista antes de cadastrar produtos." });
+      await writeAuditLog({ actorId: ctx.user.id, action: "merchandise.created", targetType: "merchandise", targetId: id, metadata: { name: input.name } });
+      return { id, persisted: true };
+    }),
+    createEventTicket: protectedProcedure.input(z.object({ eventId: z.number().int().positive(), name: z.string().trim().min(2).max(100), price: currencyPrice, quantityAvailable: z.number().int().min(0).max(100000), pixKey: z.string().trim().max(255).optional() })).mutation(async ({ ctx, input }) => {
+      if (ctx.user.accountType !== "artist" && ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas artistas podem cadastrar lotes de ingresso." });
+      const id = await createArtistEventTicket(ctx.user.id, input);
+      if (!id) throw new TRPCError({ code: "NOT_FOUND", message: "Evento não encontrado no seu perfil." });
+      await writeAuditLog({ actorId: ctx.user.id, action: "event.ticket.created", targetType: "event", targetId: input.eventId, metadata: { name: input.name, price: input.price } });
+      return { id, persisted: true };
+    }),
 
     requestUpload: protectedProcedure.input(z.object({ kind: z.enum(["audio", "image"]), fileName: z.string().trim().min(1).max(180), contentType: z.string().trim().min(1).max(120), size: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       if (ctx.user.accountType !== "artist" && ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas artistas podem enviar arquivos." });
@@ -210,7 +239,7 @@ export const appRouter = router({
       return result;
     }),
 
-    updateEvent: protectedProcedure.input(z.object({ id: z.number().int().positive(), name: z.string().trim().min(1).max(180), venue: z.string().trim().min(1).max(180), city: z.string().trim().min(1).max(120), eventDate: z.string().datetime(), eventType: z.enum(["show", "battle", "cypher", "cultural_round", "diy_festival", "occupation", "zine_fair", "workshop", "listening_party", "release"]).default("show"), admissionType: z.enum(["ticket", "free", "contribution"]).default("ticket"), description: z.string().max(500).optional(), program: z.string().max(1000).optional(), accessibility: z.string().max(500).optional(), safeSpace: z.boolean().default(false), ageRating: z.string().max(40).optional(), ticketUrl: z.string().url().optional() })).mutation(async ({ ctx, input }) => {
+    updateEvent: protectedProcedure.input(z.object({ id: z.number().int().positive(), name: z.string().trim().min(1).max(180), venue: z.string().trim().min(1).max(180), city: z.string().trim().min(1).max(120), address: z.string().trim().max(255).nullable().optional(), latitude: z.number().min(-90).max(90).nullable().optional(), longitude: z.number().min(-180).max(180).nullable().optional(), eventDate: z.string().datetime(), eventType: z.enum(["show", "battle", "cypher", "cultural_round", "diy_festival", "occupation", "zine_fair", "workshop", "listening_party", "release"]).default("show"), admissionType: z.enum(["ticket", "free", "contribution"]).default("ticket"), description: z.string().max(500).optional(), program: z.string().max(1000).optional(), accessibility: z.string().max(500).optional(), safeSpace: z.boolean().default(false), ageRating: z.string().max(40).optional(), ticketUrl: publicHttpsUrl.optional() }).refine(hasCoordinatePair, { message: "Informe latitude e longitude juntas.", path: ["longitude"] })).mutation(async ({ ctx, input }) => {
       if (ctx.user.accountType !== "artist" && ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas artistas podem editar eventos." });
       const event = await updateArtistEvent(ctx.user.id, input.id, { ...input, eventDate: new Date(input.eventDate) });
       if (!event) throw new TRPCError({ code: "NOT_FOUND", message: "Evento não encontrado." });
@@ -228,7 +257,7 @@ export const appRouter = router({
       if (!deleted) throw new TRPCError({ code: "NOT_FOUND", message: "Evento não encontrado." });
       return { deleted: true };
     }),
-    createEvent: protectedProcedure.input(z.object({ name: z.string().trim().min(1).max(180), venue: z.string().trim().min(1).max(180), city: z.string().trim().min(1).max(120), eventDate: z.string().datetime(), collectiveId: z.number().int().positive().optional(), eventType: z.enum(["show", "battle", "cypher", "cultural_round", "diy_festival", "occupation", "zine_fair", "workshop", "listening_party", "release"]).default("show"), admissionType: z.enum(["ticket", "free", "contribution"]).default("ticket"), description: z.string().max(500).optional(), program: z.string().max(1000).optional(), accessibility: z.string().max(500).optional(), safeSpace: z.boolean().default(false), ageRating: z.string().max(40).optional(), ticketUrl: z.string().url().optional() })).mutation(async ({ ctx, input }) => {
+    createEvent: protectedProcedure.input(z.object({ name: z.string().trim().min(1).max(180), venue: z.string().trim().min(1).max(180), city: z.string().trim().min(1).max(120), address: z.string().trim().max(255).optional(), latitude: z.number().min(-90).max(90).optional(), longitude: z.number().min(-180).max(180).optional(), eventDate: z.string().datetime(), collectiveId: z.number().int().positive().optional(), eventType: z.enum(["show", "battle", "cypher", "cultural_round", "diy_festival", "occupation", "zine_fair", "workshop", "listening_party", "release"]).default("show"), admissionType: z.enum(["ticket", "free", "contribution"]).default("ticket"), description: z.string().max(500).optional(), program: z.string().max(1000).optional(), accessibility: z.string().max(500).optional(), safeSpace: z.boolean().default(false), ageRating: z.string().max(40).optional(), ticketUrl: publicHttpsUrl.optional() }).refine(hasCoordinatePair, { message: "Informe latitude e longitude juntas.", path: ["longitude"] })).mutation(async ({ ctx, input }) => {
       if (ctx.user.accountType !== "artist" && ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas artistas podem criar eventos." });
       if (input.collectiveId) {
         const permission = await getCollectivePermission(ctx.user.id, input.collectiveId);
@@ -238,7 +267,7 @@ export const appRouter = router({
       if (!db) return { persisted: false, id: null };
       const owner = await db.select({ id: artists.id }).from(artists).where(eq(artists.ownerId, ctx.user.id)).limit(1);
       if (!owner[0]) throw new TRPCError({ code: "BAD_REQUEST", message: "Crie seu perfil de artista antes de criar um evento." });
-      const result = await db.insert(events).values({ ...input, artistId: owner[0].id, eventDate: new Date(input.eventDate) });
+      const result = await db.insert(events).values({ ...input, latitude: input.latitude == null ? null : String(input.latitude), longitude: input.longitude == null ? null : String(input.longitude), artistId: owner[0].id, eventDate: new Date(input.eventDate) });
       const followers = await db.select({ userId: follows.followerId }).from(follows).where(eq(follows.artistId, owner[0].id));
       if (followers.length) await db.insert(notifications).values(followers.map(follower => ({ userId: follower.userId, kind: "event" as const, title: "Novo show na sua cena", body: `${input.name} foi adicionado à agenda.`, href: `/eventos/${Number(result[0].insertId)}` })));
       return { persisted: true, id: Number(result[0].insertId) };

@@ -57,6 +57,9 @@ type EventRecord = {
   title: string;
   place: string;
   city: string;
+  address?: string | null;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
   eventDate: Date | string;
   description: string | null;
   ticketUrl: string | null;
@@ -144,6 +147,9 @@ function toSceneEvent(event: EventRecord): SceneEvent {
     title: event.title,
     place: event.place,
     city: event.city,
+    address: event.address ?? undefined,
+    latitude: event.latitude ?? undefined,
+    longitude: event.longitude ?? undefined,
     time: validDate ? date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—",
     description: event.description ?? "",
     color: "lime",
@@ -226,6 +232,15 @@ function EntityTrackRow({
       </div>
     </article>
   );
+}
+
+function EventTicketOffers({ eventId }: { eventId: number }) {
+  const tickets = trpc.scene.eventTickets.useQuery({ eventId }, { staleTime: 30_000 });
+  return <section className="content-section event-ticket-offers"><span className="eyebrow coral">lotes divulgados pela produção</span>{tickets.isLoading ? <p role="status">Carregando ofertas de ingressos…</p> : tickets.error ? <div className="empty-card" role="alert"><strong>Não foi possível carregar os lotes.</strong><span>Tente consultar novamente antes de concluir que não há ingressos.</span><button className="text-button" type="button" onClick={() => void tickets.refetch()}>Tentar novamente</button></div> : tickets.data?.length ? <div className="activity-list">{tickets.data.map(ticket => <div className="activity-item" key={ticket.id}><div><strong>{ticket.name}</strong><span>{Number(ticket.price).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} · {ticket.available} disponíveis</span></div><small>Venda direta com a produção</small>{ticket.pixKey && <small className="event-pix-key">Pix da produção: <strong>{ticket.pixKey}</strong></small>}</div>)}</div> : <p role="status">A produção ainda não divulgou lotes para este evento.</p>}</section>;
+}
+
+function ArtistMerchandise({ items }: { items: Array<{ id: number; title: string; description?: string | null; price: string | number; stock: number; imageUrl?: string | null; externalUrl?: string | null }> }) {
+  return <section className="content-section artist-merchandise"><span className="eyebrow lime">apoie diretamente</span><h2>Vitrine do projeto.</h2>{items.length ? <div className="merchandise-grid">{items.map(item => <article className="merchandise-card" key={item.id}>{item.imageUrl && <img src={item.imageUrl} alt={item.title} loading="lazy" />}<h3>{item.title}</h3>{item.description && <p>{item.description}</p>}<strong>{Number(item.price).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><small>{item.stock} disponível(is)</small>{item.externalUrl && <a className="ghost-button" href={item.externalUrl} target="_blank" rel="noreferrer">Comprar fora da CENA</a>}</article>)}</div> : <p role="status">Este projeto ainda não publicou produtos na vitrine.</p>}</section>;
 }
 
 export function EntityDetailView(props: Props) {
@@ -328,7 +343,7 @@ export function EntityDetailView(props: Props) {
     if (!artist) return <EntityState title="Perfil não encontrado." message="Não encontramos esse perfil público na CENA." />;
     const tracks = artistQuery.data ? artistQuery.data.tracks.map(track => toSceneTrack(track as TrackRecord)) : content.tracks.filter(track => track.artistId === artist.id);
     const events = artistQuery.data ? artistQuery.data.events.map(event => toSceneEvent(event as EventRecord)) : content.events.filter(event => event.artistId === artist.id);
-    return <>{demo && <DemoNotice />}{renderArtistProfile(artist, tracks, events)}</>;
+    return <>{demo && <DemoNotice />}{renderArtistProfile(artist, tracks, events)}{artistQuery.data?.artist.merchandise && <ArtistMerchandise items={artistQuery.data.artist.merchandise} />}</>;
   }
 
   if (kind === "eventos") {
@@ -358,8 +373,10 @@ export function EntityDetailView(props: Props) {
         <div className="hero-actions">
           {!record?.canceledAt && <button className="primary-button" type="button" onClick={() => onInterest(event.id)}>{interested.includes(event.id) ? "Você vai" : "Tenho interesse"}</button>}
           {event.ticketUrl && <a className="ghost-button" href={event.ticketUrl} target="_blank" rel="noreferrer"><Ticket size={16} /> Ingressos</a>}
+          {(event.address || (event.latitude != null && event.longitude != null)) && <a className="ghost-button" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.latitude != null && event.longitude != null ? `${event.latitude},${event.longitude}` : `${event.address}, ${event.place}, ${event.city}`)}`} target="_blank" rel="noreferrer"><MapPin size={16} /> Abrir mapa</a>}
           <button type="button" aria-label="Compartilhar" className="icon-button" onClick={() => onShare(`Evento ${event.title}`, `/eventos/${event.id}`)}><Share2 size={16} /></button>
         </div>
+        {!record?.canceledAt && <EventTicketOffers eventId={event.id} />}
       </div>
     );
   }

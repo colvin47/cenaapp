@@ -1,7 +1,7 @@
 # Plano — Cena
 
 ## Escopo de implementação
-O MVP será uma experiência web responsiva com linguagem de PWA, construída sobre o starter React/Express/tRPC/Drizzle já inicializado com servidor e banco gerenciados. A primeira entrega prioriza o fluxo principal: descoberta regional, autenticação via Manus OAuth, player persistente, perfil de artista/banda, upload de faixa com declaração de direitos e agenda de eventos. As interações de demonstração terão estado local para manter o protótipo navegável mesmo antes da persistência completa; o schema Drizzle e os procedimentos tRPC deixam a base pronta para conectar usuários, artistas, faixas, eventos, playlists e follows ao banco compartilhado.
+O produto é mobile-first: o app Android nativo em Expo/React Native é a experiência principal para descoberta, reprodução e agenda; o site responsivo/PWA é complementar, oferecendo presença pública, administração artística e acesso via navegador. Ambos consomem a mesma API Express/tRPC e o mesmo banco MySQL. O app atual é deliberadamente público/leitor: autenticação nativa e mutações de usuário ficam fora desta fase, enquanto uploads, edição do catálogo, perfis e agenda permanecem no site. O MVP prioriza descoberta regional, player persistente, perfil de artista/banda, upload com declaração de direitos e eventos.
 
 ## Direção visual
 Três caminhos considerados: **A. Pós-punk caloroso de bairro** (0,07): preto azulado, coral queimado, adesivos e recortes de cartaz. **B. Rádio comunitária editorial** (0,06): marfim, vinho e tipografia de jornal, com foco em agenda. **C. Noite neon da cena local** (0,08): fundo ameixa, lima elétrica, lavanda e cartões de capa como fitas de palco. Escolha: **C**, por equilibrar energia de streaming com calor de cena independente.
@@ -22,6 +22,7 @@ Três caminhos considerados: **A. Pós-punk caloroso de bairro** (0,07): preto a
 ## Arquitetura
 - `client/src/App.tsx`: shell responsivo, navegação, estado de telas, modal de login e player persistente.
 - `client/src/pages/Home.tsx`: experiência principal e componentes de descoberta, perfil, busca, eventos, biblioteca e upload em um fluxo navegável de MVP.
+- `mobile/`: app Android Expo Router/React Native, que consome as consultas públicas da API CENA e apresenta descoberta, reprodução, eventos, tickets informativos e merchandise.
 - `client/src/index.css`: tokens de cor, tipografia, layout desktop/mobile, player e componentes editoriais.
 - `client/public/`: manifesto PWA, service worker, manifest de rotas e assets demonstrativos.
 - `drizzle/schema.ts`, `server/db.ts`, `server/routers.ts`: tabelas e contratos iniciais para artistas, faixas, eventos, playlists e follows, com procedimentos públicos/protegidos básicos.
@@ -30,8 +31,8 @@ Três caminhos considerados: **A. Pós-punk caloroso de bairro** (0,07): preto a
 1. Configurar assets, manifesto PWA e metadata de projeto.
 2. Implementar a shell e o fluxo visual principal com dados seed fictícios de Campinas, SP.
 3. Adicionar schema Drizzle e endpoints tRPC para leitura do usuário e mutações de demonstração.
-4. Iniciar o servidor na porta gerenciada, validar `manus-routes.json`, checar TypeScript e build.
-5. Fazer checkpoint no repositório principal após validação.
+4. Iniciar o servidor na porta gerenciada, validar `manus-routes.json`, checar TypeScript e build web e nativo.
+5. Publicar o servidor/site pelo projeto Webdev e gerar APK pelo Dashboard Expo/EAS após vincular o app a uma conta autorizada; não gerar APK no Sandbox.
 
 ## Ciclo 2 — Cena underground brasileira
 O segundo ciclo transforma o MVP de streaming regional em infraestrutura de cena para punk, hardcore, hip hop e derivados alternativos. A implementação será incremental e compatível com o banco atual: preservar entidades existentes, adicionar campos e tabelas para perfis de coletivo, créditos, apoio direto, tipos/contexto de evento e denúncias; atualizar discovery/seed para representar a cena; e tornar upload, player e ações comunitárias coerentes.
@@ -56,3 +57,7 @@ O segundo ciclo transforma o MVP de streaming regional em infraestrutura de cena
 
 ## Ciclo 3 — cobertura nacional
 A localização deixa de ser uma lista fixa de cidades paulistas. O cliente consulta a lista oficial de municípios do IBGE, exibe município com UF e reutiliza o mesmo campo em descoberta, cadastro de ouvinte, perfil de artista, upload e agenda. O backend preserva a cidade como texto normalizado para manter compatibilidade com o banco existente; cidades sem dados persistidos exibem vazio regional, sem fallback indevido para Campinas. O caso de validação prioritário é Porto Alegre, RS.
+
+
+## Ciclo 7 — app móvel como experiência principal
+A direção aprovada pelo usuário é aproximar o CENA de um serviço mobile-first de música: o app Android é a experiência principal para descobrir, ouvir e acompanhar a cena; o site é um complemento para navegação pública e gestão dos projetos artísticos. O app deve consultar a API existente, sem criar um segundo banco, duplicar uploads ou inventar um sistema de compra. Tickets e merchandise são informativos e encaminham para a produção/destino externo; a CENA não processa pagamentos nem reservas. Endereço e coordenadas de evento são opcionais e aparecem publicamente somente quando o organizador informa. A distribuição de APK instalável depende de compilação remota no Expo/EAS Dashboard; a fonte/configuração não equivalem a um APK gerado, e a migration do servidor precisa ser aplicada no ambiente de destino mediante revisão operacional.

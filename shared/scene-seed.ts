@@ -43,6 +43,9 @@ export type SceneEvent = {
   title: string;
   place: string;
   city: string;
+  address?: string | null;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
   time: string;
   description: string;
   color: "lime" | "coral" | "lavender";

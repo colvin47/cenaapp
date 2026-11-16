@@ -664,6 +664,13 @@
             "artistId"
           ],
           "isUnique": false
+        },
+        "idx_events_collective": {
+          "name": "idx_events_collective",
+          "columns": [
+            "collectiveId"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -1590,6 +1597,13 @@
           "name": "idx_tracks_created_at",
           "columns": [
             "createdAt"
+          ],
+          "isUnique": false
+        },
+        "idx_tracks_collective": {
+          "name": "idx_tracks_collective",
+          "columns": [
+            "collectiveId"
           ],
           "isUnique": false
         }

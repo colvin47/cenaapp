@@ -637,3 +637,37 @@ img, video, audio, iframe { max-width: 100%; }
 .city-picker-nearby-note { margin: 11px 2px 1px; }
 .city-picker-option:focus-visible, .city-picker-state-label select:focus-visible, .city-picker-close:focus-visible, .city-picker-more:focus-visible, .city-picker-list-heading button:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
 @media (max-width: 560px) { .city-picker-popover { padding: 12px; border-radius: 14px; }.city-picker-results { grid-template-columns: minmax(0, 1fr); max-height: min(38vh, 260px); }.city-picker-list-heading { align-items: flex-start; }.city-picker-list-heading button { flex: 0 0 auto; } }
+
+
+/* Artist commerce: product catalog and event ticket lots. */
+.commerce-panel { display: grid; gap: 14px; margin-top: 26px; }
+.commerce-panel .commerce-disclaimer { max-width: 760px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.commerce-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.commerce-form { display: grid; gap: 13px; }
+.commerce-form .composer-heading { margin-bottom: 0; }
+.commerce-form h3 { margin: 5px 0 0; color: var(--ink); font-size: 17px; }
+.commerce-form small { color: var(--muted); line-height: 1.45; }
+.event-location-action { display: grid; align-content: start; justify-items: start; gap: 6px; }
+.event-location-action small { color: var(--muted); font-size: 10px; line-height: 1.4; }
+.event-ticket-offers { margin-top: 20px; }
+.artist-merchandise { margin-top: 24px; }
+.artist-merchandise h2 { margin: 6px 0 14px; }
+.merchandise-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.merchandise-card { display: grid; align-content: start; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.025); }
+.merchandise-card > img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 9px; background: var(--plum-850); }
+.merchandise-card h3, .merchandise-card p { margin: 0; }
+.merchandise-card h3 { color: var(--ink); font-size: 14px; }
+.merchandise-card p, .merchandise-card small { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.merchandise-card > strong { color: var(--lime); font-size: 14px; }
+.merchandise-card .ghost-button { justify-content: center; text-align: center; }
+@media (max-width: 760px) { .commerce-grid { grid-template-columns: 1fr; } .merchandise-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .merchandise-grid { grid-template-columns: 1fr; } }
+
+.event-pix-key { overflow-wrap: anywhere; color: var(--muted); font-size: 10px; }
+.event-pix-key strong { color: var(--peach); }
+
+/* Event cards keep the existing visual hierarchy while exposing a clear detail action. */
+.event-card h3 .event-title-link { padding: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
+.event-card h3 .event-title-link:hover { color: var(--event); }
+.event-card h3 .event-title-link:focus-visible { outline: 2px solid var(--event); outline-offset: 3px; border-radius: 2px; }
+.event-actions .text-button { min-height: 30px; padding: 0 7px; }

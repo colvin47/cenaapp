@@ -9,12 +9,14 @@ import {
   collectives,
   moderationReports,
   eventInterests,
+  eventTickets,
   events,
   follows,
   InsertUser,
   playlistTracks,
   playlists,
   notifications,
+  merchandise,
   savedTracks,
   trackPlays,
   trackCredits,
@@ -144,7 +146,7 @@ export async function getArtistCatalog(ownerId: number) {
   if (!artist) return { tracks: [], events: [] };
   const [artistTracks, artistEvents] = await Promise.all([
     db.select({ id: tracks.id, title: tracks.title, artist: artists.name, artistId: tracks.artistId, genre: tracks.genre, city: tracks.city, duration: tracks.durationSeconds, cover: tracks.coverUrl, audioUrl: tracks.audioUrl, sourceType: tracks.sourceType, externalUrl: tracks.externalUrl, description: tracks.description, releaseType: tracks.releaseType, releaseDate: tracks.releaseDate, creditsNote: tracks.creditsNote, bookletPages: tracks.bookletPages }).from(tracks).innerJoin(artists, eq(tracks.artistId, artists.id)).where(and(eq(tracks.artistId, artist.id), eq(tracks.visibility, "public"), eq(tracks.moderationStatus, "published"))).orderBy(desc(tracks.createdAt)).limit(100),
-    db.select({ id: events.id, title: events.name, place: events.venue, city: events.city, eventDate: events.eventDate, description: events.description, ticketUrl: events.ticketUrl, eventType: events.eventType, admissionType: events.admissionType, accessibility: events.accessibility, safeSpace: events.safeSpace, ageRating: events.ageRating, program: events.program, canceledAt: events.canceledAt, artistId: events.artistId }).from(events).where(eq(events.artistId, artist.id)).orderBy(asc(events.eventDate)).limit(100),
+    db.select({ id: events.id, title: events.name, place: events.venue, city: events.city, address: events.address, latitude: events.latitude, longitude: events.longitude, eventDate: events.eventDate, description: events.description, ticketUrl: events.ticketUrl, eventType: events.eventType, admissionType: events.admissionType, accessibility: events.accessibility, safeSpace: events.safeSpace, ageRating: events.ageRating, program: events.program, canceledAt: events.canceledAt, artistId: events.artistId }).from(events).where(eq(events.artistId, artist.id)).orderBy(asc(events.eventDate)).limit(100),
   ]);
   return { tracks: artistTracks, events: artistEvents };
 }
@@ -159,7 +161,7 @@ export async function getTrackDetail(trackId: number) {
 export async function getEventDetail(eventId: number) {
   const db = await getDb();
   if (!db) return null;
-  const result = await db.select({ id: events.id, title: events.name, place: events.venue, city: events.city, eventDate: events.eventDate, description: events.description, ticketUrl: events.ticketUrl, artistId: events.artistId, artist: artists.name, handle: artists.handle, eventType: events.eventType, admissionType: events.admissionType, accessibility: events.accessibility, safeSpace: events.safeSpace, ageRating: events.ageRating, program: events.program, canceledAt: events.canceledAt, cancelReason: events.cancelReason }).from(events).innerJoin(artists, eq(events.artistId, artists.id)).where(eq(events.id, eventId)).limit(1);
+  const result = await db.select({ id: events.id, title: events.name, place: events.venue, city: events.city, address: events.address, latitude: events.latitude, longitude: events.longitude, eventDate: events.eventDate, description: events.description, ticketUrl: events.ticketUrl, artistId: events.artistId, artist: artists.name, handle: artists.handle, eventType: events.eventType, admissionType: events.admissionType, accessibility: events.accessibility, safeSpace: events.safeSpace, ageRating: events.ageRating, program: events.program, canceledAt: events.canceledAt, cancelReason: events.cancelReason }).from(events).innerJoin(artists, eq(events.artistId, artists.id)).where(eq(events.id, eventId)).limit(1);
   return result[0] ?? null;
 }
 
@@ -171,10 +173,11 @@ export async function getArtistPublicDetail(handle: string) {
   const artist = rows[0];
   if (!artist) return null;
 
-  const [followerRows, artistTracks, artistEvents] = await Promise.all([
+  const [followerRows, artistTracks, artistEvents, artistMerchandise] = await Promise.all([
     db.select({ total: count(follows.artistId) }).from(follows).where(eq(follows.artistId, artist.id)),
     db.select({ id: tracks.id, title: tracks.title, album: tracks.album, artistId: tracks.artistId, artist: artists.name, genre: tracks.genre, city: tracks.city, duration: tracks.durationSeconds, cover: tracks.coverUrl, audioUrl: tracks.audioUrl, sourceType: tracks.sourceType, externalUrl: tracks.externalUrl, description: tracks.description, releaseType: tracks.releaseType, releaseDate: tracks.releaseDate, creditsNote: tracks.creditsNote, bookletPages: tracks.bookletPages }).from(tracks).innerJoin(artists, eq(tracks.artistId, artists.id)).where(and(eq(tracks.artistId, artist.id), eq(tracks.visibility, "public"), eq(tracks.moderationStatus, "published"), or(isNull(tracks.releaseDate), lte(tracks.releaseDate, new Date())))).orderBy(desc(tracks.createdAt)).limit(100),
-    db.select({ id: events.id, title: events.name, place: events.venue, city: events.city, eventDate: events.eventDate, description: events.description, ticketUrl: events.ticketUrl, artistId: events.artistId, eventType: events.eventType, admissionType: events.admissionType, accessibility: events.accessibility, safeSpace: events.safeSpace, ageRating: events.ageRating, program: events.program, interest: count(eventInterests.eventId) }).from(events).leftJoin(eventInterests, eq(eventInterests.eventId, events.id)).where(and(eq(events.artistId, artist.id), gte(events.eventDate, new Date()), isNull(events.canceledAt))).groupBy(events.id).orderBy(asc(events.eventDate)).limit(50),
+    db.select({ id: events.id, title: events.name, place: events.venue, city: events.city, address: events.address, latitude: events.latitude, longitude: events.longitude, eventDate: events.eventDate, description: events.description, ticketUrl: events.ticketUrl, artistId: events.artistId, eventType: events.eventType, admissionType: events.admissionType, accessibility: events.accessibility, safeSpace: events.safeSpace, ageRating: events.ageRating, program: events.program, interest: count(eventInterests.eventId) }).from(events).leftJoin(eventInterests, eq(eventInterests.eventId, events.id)).where(and(eq(events.artistId, artist.id), gte(events.eventDate, new Date()), isNull(events.canceledAt))).groupBy(events.id).orderBy(asc(events.eventDate)).limit(50),
+    listPublicMerchandise(artist.id),
   ]);
 
   return {
@@ -195,6 +198,7 @@ export async function getArtistPublicDetail(handle: string) {
       supportUrl: artist.supportUrl ?? undefined,
       pixUrl: artist.pixUrl ?? undefined,
       merchUrl: artist.merchUrl ?? undefined,
+      merchandise: artistMerchandise,
     },
     tracks: artistTracks,
     events: artistEvents.map(event => ({ ...event, interest: Number(event.interest ?? 0) })),
@@ -316,6 +320,9 @@ export async function listEvents(city?: string, searchTerm?: string) {
     place: events.venue,
     city: events.city,
     eventDate: events.eventDate,
+    address: events.address,
+    latitude: events.latitude,
+    longitude: events.longitude,
     description: events.description,
     ticketUrl: events.ticketUrl,
     eventType: events.eventType,
@@ -339,13 +346,30 @@ export async function listArtistEvents(ownerId: number) {
   return db.select().from(events).where(eq(events.artistId, artist.id)).orderBy(asc(events.eventDate)).limit(50);
 }
 
-export async function updateArtistEvent(ownerId: number, eventId: number, input: { name: string; venue: string; city: string; eventDate: Date; description?: string; ticketUrl?: string; eventType?: "show" | "battle" | "cypher" | "cultural_round" | "diy_festival" | "occupation" | "zine_fair" | "workshop" | "listening_party" | "release"; admissionType?: "ticket" | "free" | "contribution"; accessibility?: string; safeSpace?: boolean; ageRating?: string; program?: string }) {
+export async function updateArtistEvent(ownerId: number, eventId: number, input: { name: string; venue: string; city: string; address?: string | null; latitude?: number | null; longitude?: number | null; eventDate: Date; description?: string; ticketUrl?: string; eventType?: "show" | "battle" | "cypher" | "cultural_round" | "diy_festival" | "occupation" | "zine_fair" | "workshop" | "listening_party" | "release"; admissionType?: "ticket" | "free" | "contribution"; accessibility?: string; safeSpace?: boolean; ageRating?: string; program?: string }) {
   const db = await getDb();
   if (!db) return null;
   const artist = await getArtistByOwnerId(ownerId);
   if (!artist) return null;
-  const { name, venue, city, eventDate, eventType, admissionType, description, ticketUrl, accessibility, safeSpace, ageRating, program } = input;
-  await db.update(events).set({ name, venue, city, eventDate, eventType, admissionType, description: description || null, ticketUrl: ticketUrl || null, accessibility: accessibility || null, safeSpace, ageRating: ageRating || null, program: program || null, updatedAt: new Date() }).where(and(eq(events.id, eventId), eq(events.artistId, artist.id)));
+  const { name, venue, city, address, latitude, longitude, eventDate, eventType, admissionType, description, ticketUrl, accessibility, safeSpace, ageRating, program } = input;
+  await db.update(events).set({
+    name,
+    venue,
+    city,
+    ...(address !== undefined ? { address: address || null } : {}),
+    ...(latitude !== undefined ? { latitude: latitude === null ? null : String(latitude) } : {}),
+    ...(longitude !== undefined ? { longitude: longitude === null ? null : String(longitude) } : {}),
+    eventDate,
+    eventType,
+    admissionType,
+    description: description || null,
+    ticketUrl: ticketUrl || null,
+    accessibility: accessibility || null,
+    safeSpace,
+    ageRating: ageRating || null,
+    program: program || null,
+    updatedAt: new Date(),
+  }).where(and(eq(events.id, eventId), eq(events.artistId, artist.id)));
   const result = await db.select().from(events).where(and(eq(events.id, eventId), eq(events.artistId, artist.id))).limit(1);
   return result[0] ?? null;
 }
@@ -571,11 +595,84 @@ export async function toggleEventInterest(userId: number, eventId: number) {
   return true;
 }
 
+export type TrackPlayEligibility = {
+  visibility: string;
+  moderationStatus: string;
+  removedAt: Date | null;
+  releaseDate: Date | null;
+};
+
+export function isTrackEligibleForPlay(track: TrackPlayEligibility, now = new Date()) {
+  return track.visibility === "public"
+    && track.moderationStatus === "published"
+    && track.removedAt === null
+    && (track.releaseDate === null || track.releaseDate.getTime() <= now.getTime());
+}
+
 export async function recordTrackPlay(trackId: number, userId?: number) {
+  return recordTrackListen(trackId, userId, 0);
+}
+export async function recordTrackListen(trackId: number, userId: number | undefined, listenedSeconds: number, city?: string) {
   const db = await getDb();
   if (!db) return false;
-  await db.insert(trackPlays).values({ trackId, userId: userId ?? null });
+  const now = new Date();
+  const eligibleTrack = await db.select({ durationSeconds: tracks.durationSeconds, visibility: tracks.visibility, moderationStatus: tracks.moderationStatus, removedAt: tracks.removedAt, releaseDate: tracks.releaseDate }).from(tracks).where(and(
+    eq(tracks.id, trackId),
+    eq(tracks.visibility, "public"),
+    eq(tracks.moderationStatus, "published"),
+    isNull(tracks.removedAt),
+    or(isNull(tracks.releaseDate), lte(tracks.releaseDate, now)),
+  )).limit(1);
+  if (!eligibleTrack[0] || !isTrackEligibleForPlay(eligibleTrack[0], now)) return false;
+  const maxListenSeconds = eligibleTrack[0].durationSeconds == null
+    ? 86400
+    : Math.max(0, Math.min(86400, eligibleTrack[0].durationSeconds));
+  await db.insert(trackPlays).values({ trackId, userId: userId ?? null, listenedSeconds: Math.max(0, Math.min(maxListenSeconds, Math.floor(listenedSeconds))), city: city?.trim().slice(0, 120) || null });
   return true;
+}
+
+export async function listPublicEventTickets(eventId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const event = await db.select({ id: events.id }).from(events).where(and(eq(events.id, eventId), isNull(events.canceledAt))).limit(1);
+  if (!event[0]) return [];
+  const rows = await db.select({ id: eventTickets.id, eventId: eventTickets.eventId, name: eventTickets.name, price: eventTickets.price, quantityAvailable: eventTickets.quantityAvailable, quantityReserved: eventTickets.quantityReserved, pixKey: eventTickets.pixKey }).from(eventTickets).where(and(eq(eventTickets.eventId, eventId), eq(eventTickets.isAvailable, true))).orderBy(asc(eventTickets.price), asc(eventTickets.id)).limit(30);
+  return rows.filter(row => row.quantityAvailable > row.quantityReserved).map(row => ({ ...row, available: row.quantityAvailable - row.quantityReserved }));
+}
+
+export async function listPublicMerchandise(artistId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({ id: merchandise.id, artistId: merchandise.artistId, title: merchandise.name, description: merchandise.description, price: merchandise.price, stock: merchandise.stock, imageUrl: merchandise.imageUrl, externalUrl: merchandise.externalUrl }).from(merchandise).where(and(eq(merchandise.artistId, artistId), eq(merchandise.isAvailable, true))).orderBy(desc(merchandise.updatedAt)).limit(50);
+  return rows.filter(row => row.stock > 0);
+}
+
+export async function listArtistMerchandise(ownerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const artist = await getArtistByOwnerId(ownerId);
+  if (!artist) return [];
+  return db.select().from(merchandise).where(eq(merchandise.artistId, artist.id)).orderBy(desc(merchandise.updatedAt)).limit(50);
+}
+
+export async function createArtistMerchandise(ownerId: number, input: { name: string; description?: string; price: number; stock: number; imageUrl?: string; externalUrl?: string }) {
+  const db = await getDb();
+  if (!db) return null;
+  const artist = await getArtistByOwnerId(ownerId);
+  if (!artist) return null;
+  const result = await db.insert(merchandise).values({ artistId: artist.id, name: input.name, description: input.description || null, price: input.price.toFixed(2), stock: input.stock, imageUrl: input.imageUrl || null, externalUrl: input.externalUrl || null, isAvailable: input.stock > 0 });
+  return Number(result[0].insertId);
+}
+
+export async function createArtistEventTicket(ownerId: number, input: { eventId: number; name: string; price: number; quantityAvailable: number; pixKey?: string }) {
+  const db = await getDb();
+  if (!db) return null;
+  const artist = await getArtistByOwnerId(ownerId);
+  if (!artist) return null;
+  const event = await db.select({ id: events.id }).from(events).where(and(eq(events.id, input.eventId), eq(events.artistId, artist.id))).limit(1);
+  if (!event[0]) return null;
+  const result = await db.insert(eventTickets).values({ eventId: input.eventId, name: input.name, price: input.price.toFixed(2), quantityAvailable: input.quantityAvailable, pixKey: input.pixKey || null, isAvailable: input.quantityAvailable > 0 });
+  return Number(result[0].insertId);
 }
 
 export async function toggleSavedTrack(userId: number, trackId: number) {
